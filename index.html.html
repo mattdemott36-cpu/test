@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LaunchPoint – Florida Boat Ramps</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg: #0d1b2a;
+      --panel: #1a2d42;
+      --panel2: #1f3550;
+      --accent: #0ea5e9;
+      --accent2: #38bdf8;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+      --orange: #f97316;
+      --red: #ef4444;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --border: #2d4a6a;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    header .logo {
+      font-size: 24px;
+      line-height: 1;
+    }
+    header h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+    }
+    header small {
+      display: block;
+      color: var(--muted);
+      font-size: .75rem;
+      margin-top: 1px;
+    }
+    .header-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #locateBtn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 7px 14px;
+      font-size: .85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background .2s;
+    }
+    #locateBtn:hover { background: var(--accent2); }
+    #locateBtn:disabled { background: var(--border); cursor: not-allowed; }
+
+    .last-updated {
+      font-size: .72rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* ── Layout ── */
+    .app-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 380px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .sidebar-toolbar {
+      padding: 12px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .filter-btn {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: .78rem;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .filter-btn.active, .filter-btn:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .sort-select {
+      margin-left: auto;
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: .78rem;
+      cursor: pointer;
+    }
+
+    .ramp-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .ramp-list::-webkit-scrollbar { width: 5px; }
+    .ramp-list::-webkit-scrollbar-track { background: transparent; }
+    .ramp-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Ramp Card ── */
+    .ramp-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 13px 14px;
+      cursor: pointer;
+      transition: border-color .2s, box-shadow .2s;
+      position: relative;
+    }
+    .ramp-card:hover, .ramp-card.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    .ramp-card.selected { background: #162d44; }
+
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .status-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+    .status-dot.open    { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .status-dot.busy    { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+    .status-dot.vbusy   { background: var(--orange); box-shadow: 0 0 6px var(--orange); }
+    .status-dot.closed  { background: var(--red); }
+
+    .card-name {
+      font-size: .95rem;
+      font-weight: 600;
+      flex: 1;
+    }
+    .card-body {
+      font-size: .78rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .distance-badge {
+      font-size: .75rem;
+      font-weight: 700;
+      color: var(--accent2);
+      white-space: nowrap;
+    }
+
+    .card-stats {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .stat-chip {
+      background: var(--panel2);
+      border-radius: 6px;
+      padding: 4px 9px;
+      font-size: .73rem;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .stat-chip span { color: var(--muted); }
+
+    .wait-bar-wrap {
+      margin-top: 9px;
+    }
+    .wait-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: .72rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .wait-bar {
+      height: 5px;
+      background: var(--panel2);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .wait-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width .5s ease;
+    }
+    .fill-green  { background: var(--green); }
+    .fill-yellow { background: var(--yellow); }
+    .fill-orange { background: var(--orange); }
+    .fill-red    { background: var(--red); }
+
+    .alt-tag {
+      display: inline-block;
+      font-size: .67rem;
+      background: #1e3a5f;
+      color: var(--accent2);
+      border-radius: 4px;
+      padding: 2px 7px;
+      margin-top: 8px;
+    }
+
+    /* ── Map ── */
+    #map {
+      flex: 1;
+      z-index: 0;
+    }
+
+    /* ── Detail Panel ── */
+    .detail-overlay {
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      width: 320px;
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+      z-index: 1000;
+      overflow-y: auto;
+      transform: translateX(100%);
+      transition: transform .3s ease;
+      display: flex;
+      flex-direction: column;
+    }
+    .detail-overlay.open { transform: translateX(0); }
+    .detail-close {
+      position: sticky;
+      top: 0;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: .82rem;
+      color: var(--muted);
+    }
+    .detail-close:hover { color: var(--text); }
+    .detail-body { padding: 16px; }
+    .detail-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .detail-address {
+      color: var(--muted);
+      font-size: .8rem;
+      margin-bottom: 14px;
+    }
+    .detail-section {
+      margin-bottom: 16px;
+    }
+    .detail-section h3 {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: .83rem;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-val { font-weight: 600; }
+    .info-val.green  { color: var(--green); }
+    .info-val.yellow { color: var(--yellow); }
+    .info-val.orange { color: var(--orange); }
+    .info-val.red    { color: var(--red); }
+
+    .alt-list { display: flex; flex-direction: column; gap: 7px; }
+    .alt-item {
+      background: var(--panel2);
+      border-radius: 8px;
+      padding: 9px 11px;
+      font-size: .8rem;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: border-color .2s;
+    }
+    .alt-item:hover { border-color: var(--accent); }
+    .alt-item .alt-name { font-weight: 600; }
+    .alt-item .alt-meta { color: var(--muted); font-size: .74rem; margin-top: 2px; }
+
+    .amenity-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+    .amenity-tag {
+      background: var(--panel2);
+      border-radius: 5px;
+      padding: 3px 8px;
+      font-size: .73rem;
+    }
+
+    .directions-btn {
+      width: 100%;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      padding: 10px;
+      font-size: .88rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: background .2s;
+    }
+    .directions-btn:hover { background: var(--accent2); }
+
+    /* ── Legend ── */
+    .legend {
+      position: absolute;
+      bottom: 24px;
+      left: 14px;
+      z-index: 900;
+      background: rgba(26,45,66,.92);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 13px;
+      font-size: .72rem;
+      backdrop-filter: blur(6px);
+    }
+    .legend-title { color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+    .legend-row { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── No Location ── */
+    .no-loc {
+      padding: 20px;
+      text-align: center;
+      color: var(--muted);
+      font-size: .85rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 700px) {
+      .app-body { flex-direction: column; }
+      .sidebar { width: 100%; height: 50%; border-right: none; border-bottom: 1px solid var(--border); }
+      #map { min-height: 0; }
+      .detail-overlay { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⚓</div>
+  <div>
+    <h1>LaunchPoint</h1>
+    <small>Florida boat ramps · live status, wait times & alternatives</small>
+  </div>
+  <div class="header-right">
+    <div class="last-updated" id="lastUpdated">—</div>
+    <button id="locateBtn">📍 Locate Me</button>
+  </div>
+</header>
+
+<div class="app-body">
+  <div class="sidebar">
+    <div class="sidebar-toolbar">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="open">Open</button>
+      <button class="filter-btn" data-filter="busy">Busy</button>
+      <button class="filter-btn" data-filter="closed">Closed</button>
+      <select class="sort-select" id="sortSelect">
+        <option value="distance">Sort: Distance</option>
+        <option value="wait">Sort: Wait Time</option>
+        <option value="name">Sort: Name</option>
+      </select>
+    </div>
+    <div class="sidebar-toolbar" style="padding-top:8px;padding-bottom:8px;gap:6px;">
+      <span style="font-size:.72rem;color:var(--muted);align-self:center;white-space:nowrap;">Region:</span>
+      <button class="filter-btn region-btn active" data-region="all">All FL</button>
+      <button class="filter-btn region-btn" data-region="SW Florida">SW Florida</button>
+      <button class="filter-btn region-btn" data-region="Tampa Bay">Tampa Bay</button>
+    </div>
+    <div class="ramp-list" id="rampList">
+      <div class="no-loc">Click "Locate Me" to find ramps near you, or browse the map.</div>
+    </div>
+  </div>
+
+  <div style="position:relative;flex:1;display:flex;">
+    <div id="map"></div>
+    <div class="legend">
+      <div class="legend-title">STATUS</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#22c55e;box-shadow:0 0 5px #22c55e"></div> Open – short/no wait</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#f59e0b;box-shadow:0 0 5px #f59e0b"></div> Busy – moderate wait</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#f97316;box-shadow:0 0 5px #f97316"></div> Very Busy – long wait</div>
+      <div class="legend-row" style="margin-bottom:0"><div class="legend-dot" style="background:#ef4444"></div> Closed</div>
+    </div>
+    <div class="detail-overlay" id="detailPanel">
+      <div class="detail-close" id="detailClose">← Back to list</div>
+      <div class="detail-body" id="detailBody"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ─────────────────────────────────────────────
+// DATA  – Florida & Southwest Florida Boat Ramps
+// ─────────────────────────────────────────────
+const RAMPS = [
+
+  // ── SOUTHWEST FLORIDA – Collier County (Naples / Marco Island) ──
+  {
+    id: 1,
+    name: "Bayview Park Boat Ramp",
+    address: "2100 Bayview Dr, Naples, FL",
+    region: "SW Florida",
+    lat: 26.1334, lng: -81.7898,
+    lanes: 4,
+    parking: 80,
+    fee: "$10/launch",
+    status: "busy",
+    waitMin: 20,
+    occupancy: 68,
+    depth: "8 ft",
+    amenities: ["Restrooms","Parking","Fish Cleaning","Picnic Area"],
+    hours: "5:00 AM – 10:00 PM",
+    phone: "(239) 252-4000",
+    notes: "One of Naples' most-used ramps. Access to Naples Bay and Gulf. Expect lines on weekends."
+  },
+  {
+    id: 2,
+    name: "Caxambas Park Boat Ramp",
+    address: "909 Collier Ct, Marco Island, FL",
+    region: "SW Florida",
+    lat: 25.9108, lng: -81.7148,
+    lanes: 4,
+    parking: 100,
+    fee: "$10/launch",
+    status: "open",
+    waitMin: 8,
+    occupancy: 38,
+    depth: "10 ft",
+    amenities: ["Restrooms","Parking","Fuel Dock","Fish Cleaning","Bait Shop"],
+    hours: "5:00 AM – 10:00 PM",
+    phone: "(239) 389-5003",
+    notes: "Full-service facility on Marco Island. Deep water access. Fuel available on-site."
+  },
+  {
+    id: 3,
+    name: "Coconut Island Boat Ramp",
+    address: "1001 Coconut Ave, Naples, FL",
+    region: "SW Florida",
+    lat: 26.1488, lng: -81.8021,
+    lanes: 2,
+    parking: 30,
+    fee: "Free",
+    status: "open",
+    waitMin: 0,
+    occupancy: 18,
+    depth: "6 ft",
+    amenities: ["Parking","Picnic Area"],
+    hours: "Sunrise – Sunset",
+    phone: "—",
+    notes: "Small free ramp on the Gordon River. Good for kayaks and small boats."
+  },
+  {
+    id: 4,
+    name: "Vanderbilt Beach Boat Ramp",
+    address: "280 Vanderbilt Beach Rd, Naples, FL",
+    region: "SW Florida",
+    lat: 26.2588, lng: -81.8218,
+    lanes: 2,
+    parking: 40,
+    fee: "$8/launch",
+    status: "vbusy",
+    waitMin: 40,
+    occupancy: 92,
+    depth: "7 ft",
+    amenities: ["Restrooms","Parking"],
+    hours: "5:00 AM – 9:00 PM",
+    phone: "(239) 252-4000",
+    notes: "Very popular Gulf-access ramp. Fills fast on weekends — arrive before 7 AM or use Wiggins Pass instead."
+  },
+  {
+    id: 5,
+    name: "Wiggins Pass State Park Ramp",
+    address: "11100 Tamiami Trail N, Naples, FL",
+    region: "SW Florida",
+    lat: 26.2703, lng: -81.8270,
+    lanes: 3,
+    parking: 50,
+    fee: "$8/day + park entry",
+    status: "open",
+    waitMin: 10,
+    occupancy: 44,
+    depth: "8 ft",
+    amenities: ["Restrooms","Parking","Showers","Picnic Area","Kayak Rentals"],
+    hours: "8:00 AM – Sunset",
+    phone: "(239) 597-6196",
+    notes: "State park ramp with beautiful surroundings. Gulf access via Wiggins Pass. Kayaks and canoes welcome."
+  },
+
+  // ── SOUTHWEST FLORIDA – Lee County (Fort Myers / Cape Coral) ──
+  {
+    id: 6,
+    name: "Cape Coral Yacht Club Ramp",
+    address: "5819 Driftwood Pkwy, Cape Coral, FL",
+    region: "SW Florida",
+    lat: 26.5688, lng: -82.0017,
+    lanes: 4,
+    parking: 90,
+    fee: "$10/launch",
+    status: "open",
+    waitMin: 12,
+    occupancy: 50,
+    depth: "9 ft",
+    amenities: ["Restrooms","Parking","Fuel Dock","Boat Wash","Restaurant","Playground"],
+    hours: "6:00 AM – 9:00 PM",
+    phone: "(239) 574-0806",
+    notes: "City of Cape Coral facility. Wide ramp, good parking. Access to Caloosahatchee River and Pine Island Sound."
+  },
+  {
+    id: 7,
+    name: "Fort Myers Beach Ramp (Bowditch Point)",
+    address: "50 Estero Blvd, Fort Myers Beach, FL",
+    region: "SW Florida",
+    lat: 26.4469, lng: -81.9479,
+    lanes: 2,
+    parking: 35,
+    fee: "$12/launch",
+    status: "vbusy",
+    waitMin: 50,
+    occupancy: 96,
+    depth: "7 ft",
+    amenities: ["Restrooms","Parking","Bait Shop"],
+    hours: "5:30 AM – 9:00 PM",
+    phone: "(239) 765-0202",
+    notes: "Extremely popular beach-access ramp. Expect long waits on weekends. Limited trailer parking."
+  },
+  {
+    id: 8,
+    name: "Matlacha Park Boat Ramp",
+    address: "4510 Pine Island Rd NW, Matlacha, FL",
+    region: "SW Florida",
+    lat: 26.6391, lng: -82.0602,
+    lanes: 3,
+    parking: 55,
+    fee: "$5/launch",
+    status: "open",
+    waitMin: 5,
+    occupancy: 28,
+    depth: "7 ft",
+    amenities: ["Restrooms","Parking","Fish Cleaning","Picnic Area"],
+    hours: "5:00 AM – 10:00 PM",
+    phone: "(239) 533-7700",
+    notes: "Lee County park. Access to Pine Island Sound and Charlotte Harbor. Popular with snook and redfish anglers."
+  },
+  {
+    id: 9,
+    name: "Bokeelia Community Ramp",
+    address: "7880 Stringfellow Rd, Bokeelia, FL",
+    region: "SW Florida",
+    lat: 26.6960, lng: -82.1513,
+    lanes: 2,
+    parking: 25,
+    fee: "Free",
+    status: "open",
+    waitMin: 0,
+    occupancy: 12,
+    depth: "6 ft",
+    amenities: ["Parking","Fish Cleaning"],
+    hours: "Open 24 hrs",
+    phone: "—",
+    notes: "Free community ramp at the north tip of Pine Island. Great tarpon territory nearby."
+  },
+  {
+    id: 10,
+    name: "Lovers Key State Park Ramp",
+    address: "8700 Estero Blvd, Bonita Springs, FL",
+    region: "SW Florida",
+    lat: 26.3885, lng: -81.8694,
+    lanes: 2,
+    parking: 45,
+    fee: "$8/day + park entry",
+    status: "busy",
+    waitMin: 25,
+    occupancy: 70,
+    depth: "8 ft",
+    amenities: ["Restrooms","Parking","Showers","Kayak Rentals","Picnic Area","Beach Access"],
+    hours: "8:00 AM – Sunset",
+    phone: "(239) 463-4588",
+    notes: "State park with scenic estuary access. Also popular with kayakers. Park entry fee applies."
+  },
+  {
+    id: 11,
+    name: "Punta Rassa Boat Ramp",
+    address: "15001 Punta Rassa Rd, Fort Myers, FL",
+    region: "SW Florida",
+    lat: 26.5046, lng: -82.0155,
+    lanes: 4,
+    parking: 70,
+    fee: "Free",
+    status: "open",
+    waitMin: 7,
+    occupancy: 32,
+    depth: "10 ft",
+    amenities: ["Restrooms","Parking","Fish Cleaning"],
+    hours: "Open 24 hrs",
+    phone: "—",
+    notes: "Deep-water free ramp at the mouth of the Caloosahatchee. Excellent Gulf access. Active tarpon fishery spring & summer."
+  },
+  {
+    id: 12,
+    name: "Four Mile Cove Ecological Preserve",
+    address: "1370 SE 47th Terrace, Cape Coral, FL",
+    region: "SW Florida",
+    lat: 26.6115, lng: -81.9521,
+    lanes: 2,
+    parking: 30,
+    fee: "Free",
+    status: "open",
+    waitMin: 0,
+    occupancy: 8,
+    depth: "5 ft",
+    amenities: ["Restrooms","Parking","Nature Trails","Kayak Launch"],
+    hours: "7:00 AM – 7:00 PM",
+    phone: "(239) 549-4606",
+    notes: "Peaceful kayak/canoe focused launch. Mangrove estuary access. Not suitable for large motorized vessels."
+  },
+
+  // ── SOUTHWEST FLORIDA – Charlotte County ──
+  {
+    id: 13,
+    name: "Laishley Park Marina Ramp",
+    address: "1020 W Retta Esplanade, Punta Gorda, FL",
+    region: "SW Florida",
+    lat: 26.9246, lng: -82.0587,
+    lanes: 4,
+    parking: 85,
+    fee: "$8/launch",
+    status: "open",
+    waitMin: 10,
+    occupancy: 45,
+    depth: "10 ft",
+    amenities: ["Restrooms","Parking","Fuel Dock","Boat Wash","Restaurant","Ice"],
+    hours: "5:30 AM – 9:30 PM",
+    phone: "(941) 575-3369",
+    notes: "Full-service city marina on Charlotte Harbor. Excellent access to Peace River, Charlotte Harbor and Gulf."
+  },
+  {
+    id: 14,
+    name: "Ponce De Leon Park Ramp",
+    address: "3400 W Marion Ave, Punta Gorda, FL",
+    region: "SW Florida",
+    lat: 26.9264, lng: -82.0687,
+    lanes: 3,
+    parking: 60,
+    fee: "Free",
+    status: "busy",
+    waitMin: 18,
+    occupancy: 62,
+    depth: "8 ft",
+    amenities: ["Restrooms","Parking","Picnic Area","Playground","Beach"],
+    hours: "Sunrise – Sunset",
+    phone: "(941) 575-3300",
+    notes: "Popular free ramp in a city park. Charlotte Harbor access. Busy on weekends."
+  },
+  {
+    id: 15,
+    name: "Stump Pass Beach State Park Ramp",
+    address: "900 Gulf Blvd, Englewood, FL",
+    region: "SW Florida",
+    lat: 26.9140, lng: -82.3682,
+    lanes: 2,
+    parking: 35,
+    fee: "$8/day + park entry",
+    status: "open",
+    waitMin: 5,
+    occupancy: 22,
+    depth: "6 ft",
+    amenities: ["Restrooms","Parking","Beach Access","Nature Trails"],
+    hours: "8:00 AM – Sunset",
+    phone: "(941) 964-0375",
+    notes: "State park ramp giving access to Lemon Bay and the Gulf via Stump Pass. Scenic and quiet."
+  },
+  {
+    id: 16,
+    name: "Boca Grande Boat Ramp",
+    address: "Park Ave & 1st St, Boca Grande, FL",
+    region: "SW Florida",
+    lat: 26.7512, lng: -82.2647,
+    lanes: 2,
+    parking: 28,
+    fee: "Free",
+    status: "closed",
+    waitMin: null,
+    occupancy: 0,
+    depth: "9 ft",
+    amenities: ["Parking","Restrooms Nearby"],
+    hours: "Closed – Seasonal Maintenance",
+    phone: "—",
+    notes: "World-famous tarpon fishing destination. Currently closed for seasonal maintenance. Expected reopen April 1."
+  },
+
+  // ── SOUTHWEST FLORIDA – Sarasota County ──
+  {
+    id: 17,
+    name: "Ken Thompson Park Ramp",
+    address: "1700 Ken Thompson Pkwy, Sarasota, FL",
+    region: "SW Florida",
+    lat: 27.3500, lng: -82.5644,
+    lanes: 4,
+    parking: 75,
+    fee: "$10/launch",
+    status: "busy",
+    waitMin: 22,
+    occupancy: 72,
+    depth: "9 ft",
+    amenities: ["Restrooms","Parking","Fuel Dock","Boat Wash","Fish Cleaning"],
+    hours: "5:00 AM – 10:00 PM",
+    phone: "(941) 316-1172",
+    notes: "Large Sarasota County facility with direct access to New Pass and the Gulf. Very popular year-round."
+  },
+  {
+    id: 18,
+    name: "Centennial Park Boat Ramp",
+    address: "1989 Adams Lane, Sarasota, FL",
+    region: "SW Florida",
+    lat: 27.3372, lng: -82.5370,
+    lanes: 3,
+    parking: 55,
+    fee: "$5/launch",
+    status: "open",
+    waitMin: 8,
+    occupancy: 35,
+    depth: "7 ft",
+    amenities: ["Restrooms","Parking","Picnic Area"],
+    hours: "6:00 AM – 9:00 PM",
+    phone: "(941) 954-4108",
+    notes: "City of Sarasota ramp on Sarasota Bay. Good access to bay and ICW. Calmer water than Gulf ramps."
+  },
+  {
+    id: 19,
+    name: "Blackburn Point Boat Ramp",
+    address: "2001 Blackburn Point Rd, Osprey, FL",
+    region: "SW Florida",
+    lat: 27.1782, lng: -82.4690,
+    lanes: 3,
+    parking: 48,
+    fee: "$8/launch",
+    status: "open",
+    waitMin: 5,
+    occupancy: 25,
+    depth: "8 ft",
+    amenities: ["Restrooms","Parking","Fish Cleaning","Bait Shop Nearby"],
+    hours: "5:00 AM – 9:00 PM",
+    phone: "(941) 861-9807",
+    notes: "Access to Little Sarasota Bay and ICW. Popular with kayakers and snook anglers."
+  },
+
+  // ── OTHER FLORIDA (Tampa Bay / Central West) ──
+  {
+    id: 20,
+    name: "Picnic Island Park Ramp",
+    address: "7400 Picnic Island Blvd, Tampa, FL",
+    region: "Tampa Bay",
+    lat: 27.8850, lng: -82.5580,
+    lanes: 4,
+    parking: 95,
+    fee: "Free",
+    status: "vbusy",
+    waitMin: 45,
+    occupancy: 93,
+    depth: "9 ft",
+    amenities: ["Restrooms","Parking","Picnic Area","Beach","Fish Cleaning"],
+    hours: "Open 24 hrs",
+    phone: "(813) 274-8615",
+    notes: "Free Tampa Bay ramp — extremely popular. Arrive very early on weekends. Direct Gulf access via Tampa Bay."
+  },
+  {
+    id: 21,
+    name: "Gandy Bridge Boat Ramp",
+    address: "2520 N Gandy Blvd, Tampa, FL",
+    region: "Tampa Bay",
+    lat: 27.9172, lng: -82.5333,
+    lanes: 3,
+    parking: 60,
+    fee: "Free",
+    status: "busy",
+    waitMin: 20,
+    occupancy: 65,
+    depth: "7 ft",
+    amenities: ["Parking","Fish Cleaning","Restrooms"],
+    hours: "Open 24 hrs",
+    phone: "—",
+    notes: "Popular free ramp at Gandy Bridge on Tampa Bay. Good sheepshead and redfish spot nearby."
+  },
+  {
+    id: 22,
+    name: "Fort De Soto Park Ramp",
+    address: "3500 Pinellas Bayway S, Tierra Verde, FL",
+    region: "Tampa Bay",
+    lat: 27.6280, lng: -82.7300,
+    lanes: 4,
+    parking: 80,
+    fee: "$5/launch + park entry",
+    status: "open",
+    waitMin: 10,
+    occupancy: 40,
+    depth: "10 ft",
+    amenities: ["Restrooms","Parking","Beach","Camping","Picnic Area","Fishing Piers"],
+    hours: "7:00 AM – 9:00 PM",
+    phone: "(727) 582-2267",
+    notes: "Excellent ramp at award-winning county park. Gulf and Tampa Bay access. Great for families."
+  },
+  {
+    id: 23,
+    name: "Cotee River Park Ramp",
+    address: "6017 Massachusetts Ave, New Port Richey, FL",
+    region: "Tampa Bay",
+    lat: 28.2430, lng: -82.7230,
+    lanes: 2,
+    parking: 40,
+    fee: "Free",
+    status: "open",
+    waitMin: 0,
+    occupancy: 15,
+    depth: "6 ft",
+    amenities: ["Restrooms","Parking","Picnic Area"],
+    hours: "Sunrise – Sunset",
+    phone: "(727) 834-3247",
+    notes: "Quiet free ramp on the Cotee River. Access to Gulf of Mexico via the river. Less traffic than Tampa ramps."
+  },
+  {
+    id: 24,
+    name: "Tarpon Springs Sponge Docks Ramp",
+    address: "801 Dodecanese Blvd, Tarpon Springs, FL",
+    region: "Tampa Bay",
+    lat: 28.1450, lng: -82.7558,
+    lanes: 3,
+    parking: 50,
+    fee: "$5/launch",
+    status: "open",
+    waitMin: 8,
+    occupancy: 30,
+    depth: "8 ft",
+    amenities: ["Restrooms","Parking","Restaurant","Bait Shop","Fuel Nearby"],
+    hours: "5:30 AM – 8:30 PM",
+    phone: "(727) 942-5605",
+    notes: "Historic sponge docks location. Anclote River to Gulf access. Great grouper and snapper fishing offshore."
+  }
+];
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let userLat = null, userLng = null;
+let selectedId = null;
+let currentFilter = 'all';
+let currentRegion = 'all';
+let currentSort = 'distance';
+let markers = {};
+let userMarker = null;
+
+// ─────────────────────────────────────────────
+// MAP
+// ─────────────────────────────────────────────
+const map = L.map('map', { zoomControl: false }).setView([26.55, -82.00], 9);
+L.control.zoom({ position: 'topright' }).addTo(map);
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap contributors © CARTO',
+  maxZoom: 19
+}).addTo(map);
+
+// ─────────────────────────────────────────────
+// UTILS
+// ─────────────────────────────────────────────
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 3958.8; // miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function statusColor(s) {
+  return { open:'#22c55e', busy:'#f59e0b', vbusy:'#f97316', closed:'#ef4444' }[s] || '#94a3b8';
+}
+function statusLabel(s) {
+  return { open:'Open', busy:'Busy', vbusy:'Very Busy', closed:'Closed' }[s] || s;
+}
+function waitLabel(r) {
+  if (r.status === 'closed') return 'Closed';
+  if (r.waitMin === 0) return 'No wait';
+  return `~${r.waitMin} min`;
+}
+function fillClass(occ) {
+  if (occ >= 85) return 'fill-red';
+  if (occ >= 60) return 'fill-orange';
+  if (occ >= 35) return 'fill-yellow';
+  return 'fill-green';
+}
+function distLabel(d) {
+  if (d == null) return '—';
+  return d < 10 ? d.toFixed(1) + ' mi' : Math.round(d) + ' mi';
+}
+
+function rampDist(r) {
+  if (userLat == null) return null;
+  return haversine(userLat, userLng, r.lat, r.lng);
+}
+
+// ─────────────────────────────────────────────
+// ALTERNATIVES  (nearest open/busy ramps)
+// ─────────────────────────────────────────────
+function getAlternatives(ramp, count = 3) {
+  return RAMPS
+    .filter(r => r.id !== ramp.id && r.status !== 'closed')
+    .map(r => ({ ...r, _dist: haversine(ramp.lat, ramp.lng, r.lat, r.lng) }))
+    .sort((a, b) => a._dist - b._dist)
+    .slice(0, count);
+}
+
+// ─────────────────────────────────────────────
+// MARKERS
+// ─────────────────────────────────────────────
+function makeIcon(status, selected) {
+  const c = statusColor(status);
+  const size = selected ? 18 : 14;
+  const ring = selected ? `stroke="${c}" stroke-width="3" fill="none" cx="12" cy="12" r="10"` : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+    ${selected ? `<circle ${ring}/>` : ''}
+    <circle cx="12" cy="12" r="${size/2}" fill="${c}" opacity="${selected?1:.9}"/>
+    <text x="12" y="16" text-anchor="middle" font-size="9" fill="#fff" font-family="sans-serif">⚓</text>
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: '',
+    iconSize: [24,24],
+    iconAnchor: [12,12],
+    popupAnchor: [0,-14]
+  });
+}
+
+function buildMarkers() {
+  RAMPS.forEach(r => {
+    const m = L.marker([r.lat, r.lng], { icon: makeIcon(r.status, false) })
+      .addTo(map)
+      .bindPopup(`<b>${r.name}</b><br>${statusLabel(r.status)} · ${waitLabel(r)}`);
+    m.on('click', () => selectRamp(r.id));
+    markers[r.id] = m;
+  });
+}
+buildMarkers();
+
+// ─────────────────────────────────────────────
+// RENDER LIST
+// ─────────────────────────────────────────────
+function getFilteredSorted() {
+  let list = RAMPS.map(r => ({ ...r, _dist: rampDist(r) }));
+
+  if (currentFilter !== 'all') {
+    const map2 = { open: ['open'], busy: ['busy','vbusy'], closed: ['closed'] };
+    list = list.filter(r => (map2[currentFilter]||[]).includes(r.status));
+  }
+  if (currentRegion !== 'all') {
+    list = list.filter(r => r.region === currentRegion);
+  }
+
+  if (currentSort === 'distance') {
+    list.sort((a, b) => {
+      if (a._dist == null && b._dist == null) return a.name.localeCompare(b.name);
+      if (a._dist == null) return 1;
+      if (b._dist == null) return -1;
+      return a._dist - b._dist;
+    });
+  } else if (currentSort === 'wait') {
+    list.sort((a, b) => {
+      const wa = a.status === 'closed' ? 9999 : (a.waitMin || 0);
+      const wb = b.status === 'closed' ? 9999 : (b.waitMin || 0);
+      return wa - wb;
+    });
+  } else {
+    list.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return list;
+}
+
+function renderList() {
+  const list = getFilteredSorted();
+  const el = document.getElementById('rampList');
+  if (list.length === 0) {
+    el.innerHTML = '<div class="no-loc">No ramps match this filter.</div>';
+    return;
+  }
+
+  el.innerHTML = list.map(r => {
+    const dist = r._dist != null ? distLabel(r._dist) : null;
+    const isAlt = r.status !== 'closed';
+    const pct = r.occupancy;
+    const fc = fillClass(pct);
+    const sel = r.id === selectedId ? 'selected' : '';
+    return `<div class="ramp-card ${sel}" data-id="${r.id}">
+      <div class="card-top">
+        <div class="status-dot ${r.status}"></div>
+        <div>
+          <div class="card-name">${r.name}</div>
+          <div class="card-body">${r.address}</div>
+          <div style="margin-top:3px"><span style="font-size:.67rem;background:#1e3a5f;color:#7dd3fc;border-radius:4px;padding:1px 6px">${r.region}</span></div>
+        </div>
+        ${dist ? `<div class="distance-badge">${dist}</div>` : ''}
+      </div>
+      <div class="card-stats">
+        <div class="stat-chip"><span>Status</span>&nbsp;${statusLabel(r.status)}</div>
+        <div class="stat-chip"><span>Wait</span>&nbsp;${waitLabel(r)}</div>
+        <div class="stat-chip"><span>Lanes</span>&nbsp;${r.lanes}</div>
+        <div class="stat-chip"><span>Fee</span>&nbsp;${r.fee}</div>
+      </div>
+      ${r.status !== 'closed' ? `
+      <div class="wait-bar-wrap">
+        <div class="wait-bar-label"><span>Occupancy</span><span>${pct}%</span></div>
+        <div class="wait-bar"><div class="wait-bar-fill ${fc}" style="width:${pct}%"></div></div>
+      </div>` : ''}
+      ${r.status === 'closed' || r.status === 'vbusy' ? `<div class="alt-tag">Alternatives available →</div>` : ''}
+    </div>`;
+  }).join('');
+
+  el.querySelectorAll('.ramp-card').forEach(card => {
+    card.addEventListener('click', () => selectRamp(+card.dataset.id));
+  });
+}
+
+// ─────────────────────────────────────────────
+// SELECT / DETAIL
+// ─────────────────────────────────────────────
+function selectRamp(id) {
+  if (selectedId) {
+    const prev = RAMPS.find(r => r.id === selectedId);
+    if (prev) markers[prev.id].setIcon(makeIcon(prev.status, false));
+  }
+  selectedId = id;
+  const ramp = RAMPS.find(r => r.id === id);
+  if (!ramp) return;
+
+  markers[id].setIcon(makeIcon(ramp.status, true));
+  map.flyTo([ramp.lat, ramp.lng], 13, { duration: 0.8 });
+
+  renderList();
+  renderDetail(ramp);
+}
+
+function renderDetail(ramp) {
+  const alts = getAlternatives(ramp);
+  const dist = userLat != null ? distLabel(haversine(userLat, userLng, ramp.lat, ramp.lng)) : null;
+  const sc = { open:'green', busy:'yellow', vbusy:'orange', closed:'red' }[ramp.status];
+
+  const altHtml = alts.map(a => {
+    const ad = distLabel(haversine(ramp.lat, ramp.lng, a.lat, a.lng));
+    return `<div class="alt-item" data-id="${a.id}">
+      <div class="alt-name">${a.name}</div>
+      <div class="alt-meta">${statusLabel(a.status)} · ${waitLabel(a)} · ${ad} away</div>
+    </div>`;
+  }).join('');
+
+  const amenHtml = ramp.amenities.map(a => `<span class="amenity-tag">${a}</span>`).join('');
+
+  document.getElementById('detailBody').innerHTML = `
+    <div class="detail-title">${ramp.name}</div>
+    <div class="detail-address">${ramp.address}</div>
+
+    <div class="detail-section">
+      <h3>Current Status</h3>
+      <div class="info-row"><span>Status</span><span class="info-val ${sc}">${statusLabel(ramp.status)}</span></div>
+      <div class="info-row"><span>Wait Time</span><span class="info-val">${waitLabel(ramp)}</span></div>
+      <div class="info-row"><span>Occupancy</span><span class="info-val">${ramp.status !== 'closed' ? ramp.occupancy+'%' : '—'}</span></div>
+      ${dist ? `<div class="info-row"><span>Distance</span><span class="info-val">${dist}</span></div>` : ''}
+    </div>
+
+    <div class="detail-section">
+      <h3>Ramp Info</h3>
+      <div class="info-row"><span>Launch Lanes</span><span class="info-val">${ramp.lanes}</span></div>
+      <div class="info-row"><span>Parking Spots</span><span class="info-val">${ramp.parking}</span></div>
+      <div class="info-row"><span>Water Depth</span><span class="info-val">${ramp.depth}</span></div>
+      <div class="info-row"><span>Fee</span><span class="info-val">${ramp.fee}</span></div>
+      <div class="info-row"><span>Hours</span><span class="info-val" style="text-align:right;max-width:160px">${ramp.hours}</span></div>
+      ${ramp.phone !== '—' ? `<div class="info-row"><span>Phone</span><span class="info-val">${ramp.phone}</span></div>` : ''}
+    </div>
+
+    <div class="detail-section">
+      <h3>Amenities</h3>
+      <div class="amenity-tags">${amenHtml}</div>
+    </div>
+
+    ${ramp.notes ? `<div class="detail-section">
+      <h3>Notes</h3>
+      <p style="font-size:.8rem;color:var(--muted);line-height:1.5">${ramp.notes}</p>
+    </div>` : ''}
+
+    <div class="detail-section">
+      <h3>Nearby Alternatives</h3>
+      <div class="alt-list">${altHtml}</div>
+    </div>
+
+    <button class="directions-btn" onclick="openDirections(${ramp.lat}, ${ramp.lng})">
+      🧭 Get Directions
+    </button>
+  `;
+
+  document.getElementById('detailPanel').classList.add('open');
+
+  document.querySelectorAll('.alt-item').forEach(el => {
+    el.addEventListener('click', () => {
+      document.getElementById('detailPanel').classList.remove('open');
+      setTimeout(() => selectRamp(+el.dataset.id), 150);
+    });
+  });
+}
+
+function openDirections(lat, lng) {
+  window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+}
+
+document.getElementById('detailClose').addEventListener('click', () => {
+  document.getElementById('detailPanel').classList.remove('open');
+});
+
+// ─────────────────────────────────────────────
+// GEOLOCATION
+// ─────────────────────────────────────────────
+document.getElementById('locateBtn').addEventListener('click', locate);
+
+function locate() {
+  const btn = document.getElementById('locateBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Locating…';
+
+  if (!navigator.geolocation) {
+    alert('Geolocation is not supported by your browser.');
+    btn.disabled = false;
+    btn.textContent = '📍 Locate Me';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(pos => {
+    userLat = pos.coords.latitude;
+    userLng = pos.coords.longitude;
+
+    if (userMarker) map.removeLayer(userMarker);
+    userMarker = L.circleMarker([userLat, userLng], {
+      radius: 8, fillColor: '#0ea5e9', fillOpacity: 1,
+      color: '#fff', weight: 2
+    }).addTo(map).bindPopup('You are here');
+
+    map.flyTo([userLat, userLng], 10, { duration: 1 });
+    renderList();
+
+    btn.disabled = false;
+    btn.textContent = '📍 Locate Me';
+  }, err => {
+    // Demo: use a fallback location (Naples, FL area)
+    console.warn('Geolocation denied, using demo location');
+    userLat = 26.14;
+    userLng = -81.79;
+
+    if (userMarker) map.removeLayer(userMarker);
+    userMarker = L.circleMarker([userLat, userLng], {
+      radius: 8, fillColor: '#0ea5e9', fillOpacity: 0.6,
+      color: '#0ea5e9', weight: 2, dashArray: '4'
+    }).addTo(map).bindPopup('Demo location (Naples, FL)');
+
+    map.flyTo([userLat, userLng], 10, { duration: 1 });
+    renderList();
+
+    btn.disabled = false;
+    btn.textContent = '📍 Locate Me';
+  });
+}
+
+// ─────────────────────────────────────────────
+// FILTERS & SORT
+// ─────────────────────────────────────────────
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = btn.dataset.filter;
+    renderList();
+  });
+});
+
+document.getElementById('sortSelect').addEventListener('change', e => {
+  currentSort = e.target.value;
+  renderList();
+});
+
+document.querySelectorAll('.region-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.region-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentRegion = btn.dataset.region;
+    renderList();
+  });
+});
+
+// ─────────────────────────────────────────────
+// LIVE UPDATE SIMULATION
+// ─────────────────────────────────────────────
+function tickUpdate() {
+  RAMPS.forEach(r => {
+    if (r.status === 'closed') return;
+    // Drift occupancy ±3%
+    r.occupancy = Math.max(5, Math.min(98, r.occupancy + (Math.random() * 6 - 3) | 0));
+    // Recalculate wait
+    r.waitMin = r.status === 'closed' ? null : Math.max(0, Math.round(r.occupancy * 0.5 - 10));
+    // Occasionally flip busy/open
+    if (r.occupancy >= 80 && r.status === 'open')   r.status = 'busy';
+    if (r.occupancy >= 90 && r.status === 'busy')    r.status = 'vbusy';
+    if (r.occupancy < 70  && r.status === 'vbusy')   r.status = 'busy';
+    if (r.occupancy < 45  && r.status === 'busy')    r.status = 'open';
+    // Refresh marker icon
+    const sel = r.id === selectedId;
+    if (markers[r.id]) markers[r.id].setIcon(makeIcon(r.status, sel));
+  });
+
+  renderList();
+  if (selectedId) {
+    const r = RAMPS.find(x => x.id === selectedId);
+    if (r) renderDetail(r);
+  }
+  document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
+setInterval(tickUpdate, 30000);
+tickUpdate(); // initial render
+
+// Initial list render
+renderList();
+</script>
+</body>
+</html>
